@@ -1,0 +1,102 @@
+From e7cdcf5443e5d4bed641a9f82a6f73e3ca5166c5 Mon Sep 17 00:00:00 2001
+From: Julian Stecklina <js@alien8.de>
+Date: Fri, 25 Nov 2022 13:27:27 +0100
+Subject: [PATCH] platform/x86: think-lmi: expose 'type' attribute
+
+... to satisfy fwupd. Valid values that fwupd accepts are enumeration,
+string, and integer. We just opt for string for everything for now.
+
+The fwupd error message in question is:
+
+   sudo fwupdtool security
+[sudo] password for julian:
+Loading                 [*************************              ]
+12:27:57:0662 FuBiosSettings       KERNEL BUG: 'type' attribute not exported: (failed to load type: Failed to open file /sys/class/firmware-attributes/thinklmi/attributes/SecureBoot/type: No such file or directory)
+Loading                 [-                                      ]
+
+Not enough data was provided to make an HSI calculation.
+  https://fwupd.github.io/hsi.html#not-enough-info
+To ignore this warning, use --force
+
+Signed-off-by: Julian Stecklina <julian.stecklina@cyberus-technology.de>
+---
+ drivers/platform/x86/think-lmi.c | 30 ++++++++++++++++++++++++++++++
+ drivers/platform/x86/think-lmi.h |  1 +
+ 2 files changed, 31 insertions(+)
+
+diff --git a/drivers/platform/x86/think-lmi.c b/drivers/platform/x86/think-lmi.c
+index a01a92769c1a..090fd81c8a5a 100644
+--- a/drivers/platform/x86/think-lmi.c
++++ b/drivers/platform/x86/think-lmi.c
+@@ -917,6 +917,26 @@ static ssize_t display_name_show(struct kobject *kobj, struct kobj_attribute *at
+ 	return sysfs_emit(buf, "%s\n", setting->display_name);
+ }
+ 
++static ssize_t type_show(struct kobject *kobj, struct kobj_attribute *attr,
++		char *buf)
++{
++	struct tlmi_attr_setting *setting = to_tlmi_attr_setting(kobj);
++
++	return sysfs_emit(buf, "%s\n", setting->type);
++}
++
++static ssize_t min_length_show(struct kobject *kobj, struct kobj_attribute *attr,
++		char *buf)
++{
++	return sysfs_emit(buf, "%d\n", 0);
++}
++
++static ssize_t max_length_show(struct kobject *kobj, struct kobj_attribute *attr,
++		char *buf)
++{
++	return sysfs_emit(buf, "%d\n", TLMI_SETTINGS_MAXLEN);
++}
++
+ static ssize_t current_value_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+ {
+ 	struct tlmi_attr_setting *setting = to_tlmi_attr_setting(kobj);
+@@ -1034,12 +1054,21 @@ static struct kobj_attribute attr_displ_name = __ATTR_RO(display_name);
+ 
+ static struct kobj_attribute attr_possible_values = __ATTR_RO(possible_values);
+ 
++static struct kobj_attribute attr_type = __ATTR_RO(type);
++
++static struct kobj_attribute attr_min_length = __ATTR_RO(min_length);
++
++static struct kobj_attribute attr_max_length = __ATTR_RO(max_length);
++
+ static struct kobj_attribute attr_current_val = __ATTR_RW_MODE(current_value, 0600);
+ 
+ static struct attribute *tlmi_attrs[] = {
+ 	&attr_displ_name.attr,
+ 	&attr_current_val.attr,
+ 	&attr_possible_values.attr,
++	&attr_type.attr,
++	&attr_min_length.attr,
++	&attr_max_length.attr,
+ 	NULL
+ };
+ 
+@@ -1416,6 +1445,7 @@ static int tlmi_analyze(void)
+ 		}
+ 		setting->index = i;
+ 		strscpy(setting->display_name, item, TLMI_SETTINGS_MAXLEN);
++		strscpy(setting->type, "string", TLMI_SETTINGS_MAXLEN);
+ 		/* If BIOS selections supported, load those */
+ 		if (tlmi_priv.can_get_bios_selections) {
+ 			ret = tlmi_get_bios_selections(setting->display_name,
+diff --git a/drivers/platform/x86/think-lmi.h b/drivers/platform/x86/think-lmi.h
+index 4daba6151cd6..8fe5abc29c2e 100644
+--- a/drivers/platform/x86/think-lmi.h
++++ b/drivers/platform/x86/think-lmi.h
+@@ -72,6 +72,7 @@ struct tlmi_attr_setting {
+ 	struct kobject kobj;
+ 	int index;
+ 	char display_name[TLMI_SETTINGS_MAXLEN];
++	char type[TLMI_SETTINGS_MAXLEN];
+ 	char *possible_values;
+ };
+ 
+-- 
+2.38.1
+
