@@ -9,22 +9,27 @@ in
 {
   options.boot.lanzaboote = {
     enable = mkEnableOption "Enable the LANZABOOTE";
+
     enrollKeys = mkEnableOption "Automatic enrollment of the keys using sbctl";
+
     pkiBundle = mkOption {
       type = types.nullOr types.path;
       default = null;
       description = "PKI bundle containg db, PK, KEK";
     };
+
     publicKeyFile = mkOption {
       type = types.path;
       default = if cfg.pkiBundle != null then "${cfg.pkiBundle}/keys/db/db.pem" else null;
       description = "Public key to sign your boot files";
     };
+
     privateKeyFile = mkOption {
       type = types.path;
       default = if cfg.pkiBundle != null then "${cfg.pkiBundle}/keys/db/db.key" else null;
       description = "Private key to sign your boot files";
     };
+
     package = mkOption {
       type = types.package;
       default = pkgs.lanzatool;
