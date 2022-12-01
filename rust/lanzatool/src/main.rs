@@ -4,6 +4,7 @@ mod esp;
 mod generation;
 mod install;
 mod pe;
+mod profile;
 mod signature;
 mod utils;
 

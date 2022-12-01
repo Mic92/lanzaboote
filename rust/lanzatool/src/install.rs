@@ -10,49 +10,70 @@ use tempfile::tempdir;
 use crate::esp::EspPaths;
 use crate::generation::Generation;
 use crate::pe;
+use crate::profile::Profile;
 use crate::signature::KeyPair;
 
 pub struct Installer {
     lanzaboote_stub: PathBuf,
     key_pair: KeyPair,
+    configuration_limit: u64,
     esp: PathBuf,
-    generations: Vec<PathBuf>,
+    profiles: Vec<PathBuf>,
 }
 
 impl Installer {
     pub fn new(
         lanzaboote_stub: PathBuf,
         key_pair: KeyPair,
+        configuration_limit: u64,
         esp: PathBuf,
-        generations: Vec<PathBuf>,
+        profiles: Vec<PathBuf>,
     ) -> Self {
         Self {
             lanzaboote_stub,
             key_pair,
+            configuration_limit,
             esp,
-            generations,
+            profiles,
         }
     }
 
     pub fn install(&self) -> Result<()> {
-        for toplevel in &self.generations {
-            let generation = Generation::from_toplevel(toplevel).with_context(|| {
-                format!("Failed to build generation from toplevel: {toplevel:?}")
-            })?;
+        let mut profiles = self
+            .profiles
+            .iter()
+            .map(Profile::from_path)
+            .collect::<Result<Vec<Profile>>>()?;
 
-            println!("Installing generation {generation}");
+        // Sort the profiles by version
+        profiles.sort();
 
-            self.install_generation(&generation)
-                .context("Failed to install generation")?;
+        // Only install the number of profiles configured via configuration_limit
+        profiles
+            .iter()
+            .rev()
+            .take(self.configuration_limit as usize)
+            .try_for_each(|p| self.install_profile(p))?;
 
-            for (name, bootspec) in &generation.bootspec.specialisation {
-                let specialised_generation = generation.specialise(name, bootspec);
+        Ok(())
+    }
 
-                println!("Installing specialisation: {name} of generation: {generation}");
+    fn install_profile(&self, profile: &Profile) -> Result<()> {
+        let generation = Generation::from_profile(profile)
+            .with_context(|| format!("Failed to build generation from profile: {profile:?}"))?;
 
-                self.install_generation(&specialised_generation)
-                    .context("Failed to install specialisation")?;
-            }
+        println!("Installing generation {generation}");
+
+        self.install_generation(&generation)
+            .context("Failed to install generation")?;
+
+        for (name, bootspec) in &generation.bootspec.specialisation {
+            let specialised_generation = generation.specialise(name, bootspec);
+
+            println!("Installing specialisation: {name} of generation: {generation}");
+
+            self.install_generation(&specialised_generation)
+                .context("Failed to install specialisation")?;
         }
 
         Ok(())
